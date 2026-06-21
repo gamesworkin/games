@@ -1,7 +1,7 @@
-Import { initializeApp } from "firebase/app";
+import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "firebase/auth";
 
-// ⚠️ SUBSTITUA PELAS CREDENCIAIS DO SEU CONSOLE FIREBASE
+// ⚠️ CREDENCIAIS DO SEU CONSOLE FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyATr3AFcjJtamWRKZEBBcsA8vi-_ckCeEs",
   authDomain: "games2-c9b04.firebaseapp.com",
@@ -28,17 +28,18 @@ const btnLogout = document.getElementById('btn-logout');
 const userInfo = document.getElementById('user-info');
 const userAvatar = document.getElementById('user-avatar');
 const userName = document.getElementById('user-name');
+const romUploadInput = document.getElementById('rom-upload');
+const fileNameDisplay = document.getElementById('file-name-display');
 
 // Listener de Sessão Ativa
 onAuthStateChanged(auth, (user) => {
     if (user) {
         currentUser = user;
-        btnLogin.classList.add('hidden');
-        userInfo.classList.remove('hidden');
-        userAvatar.src = user.photoURL;
-        userName.textContent = user.displayName.split(' ')[0];
+        if (btnLogin) btnLogin.classList.add('hidden');
+        if (userInfo) userInfo.classList.remove('hidden');
+        if (userAvatar) userAvatar.src = user.photoURL;
+        if (userName) userName.textContent = user.displayName.split(' ')[0];
         
-        // Se houver um token guardado na sessão após a purga do refresh, restaura automaticamente
         if (sessionStorage.getItem('g_token')) {
             googleAccessToken = sessionStorage.getItem('g_token');
         }
@@ -46,30 +47,44 @@ onAuthStateChanged(auth, (user) => {
         currentUser = null;
         googleAccessToken = null;
         sessionStorage.removeItem('g_token');
-        btnLogin.classList.remove('hidden');
-        userInfo.classList.add('hidden');
+        if (btnLogin) btnLogin.classList.remove('hidden');
+        if (userInfo) userInfo.classList.add('hidden');
     }
 });
 
 // Abertura do Fluxo de Autenticação do Google
-btnLogin.addEventListener('click', async () => {
-    try {
-        const result = await signInWithPopup(auth, provider);
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        googleAccessToken = credential.accessToken;
-        
-        // Memoriza o token na sessão para não deslogar o Drive no fechamento por Refresh
-        sessionStorage.setItem('g_token', googleAccessToken);
-        console.log("Token do Google Drive obtido com sucesso!");
-    } catch (error) {
-        console.error("Erro no fluxo de login: ", error);
-    }
-});
+if (btnLogin) {
+    btnLogin.addEventListener('click', async () => {
+        try {
+            const result = await signInWithPopup(auth, provider);
+            const credential = GoogleAuthProvider.credentialFromResult(result);
+            googleAccessToken = credential.accessToken;
+            
+            sessionStorage.setItem('g_token', googleAccessToken);
+            console.log("Token do Google Drive obtido com sucesso!");
+        } catch (error) {
+            console.error("Erro no fluxo de login: ", error);
+        }
+    });
+}
 
-btnLogout.addEventListener('click', () => {
-    sessionStorage.removeItem('g_token');
-    signOut(auth);
-});
+if (btnLogout) {
+    btnLogout.addEventListener('click', () => {
+        sessionStorage.removeItem('g_token');
+        signOut(auth);
+    });
+}
+
+// Ouvinte para atualizar o texto do arquivo selecionado (Corrigido)
+if (romUploadInput && fileNameDisplay) {
+    romUploadInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            fileNameDisplay.textContent = e.target.files[0].name;
+        } else {
+            fileNameDisplay.textContent = "Nenhum arquivo selecionado";
+        }
+    });
+}
 
 /**
  * Executado ao carregar a página: Verifica se o site veio de um comando de fechamento de emulador
@@ -77,9 +92,10 @@ btnLogout.addEventListener('click', () => {
 window.addEventListener('DOMContentLoaded', () => {
     if (sessionStorage.getItem('emu_purge_active') === 'true') {
         sessionStorage.removeItem('emu_purge_active');
-        // Garante o posicionamento visual correto na Dashboard limpa
-        document.getElementById('emulator-screen').classList.add('hidden');
-        document.getElementById('catalog-screen').classList.remove('hidden');
+        const emuScreen = document.getElementById('emulator-screen');
+        const catScreen = document.getElementById('catalog-screen');
+        if (emuScreen) emuScreen.classList.add('hidden');
+        if (catScreen) catScreen.classList.remove('hidden');
         console.log("Instância anterior eliminada com sucesso. Memória física do navegador restaurada.");
     }
 });
@@ -88,14 +104,20 @@ window.addEventListener('DOMContentLoaded', () => {
  * Motor de Inicialização Síncrono do Emulador
  */
 window.launchGame = function(system, romUrl, gameTitle) {
-    document.getElementById('catalog-screen').classList.add('hidden');
+    const catalogScreen = document.getElementById('catalog-screen');
     const emuScreen = document.getElementById('emulator-screen');
-    emuScreen.classList.remove('hidden');
-    document.getElementById('playing-title').textContent = `Jogando: ${gameTitle}`;
-
+    const playingTitle = document.getElementById('playing-title');
     const wrapper = document.getElementById('player-wrapper-target');
-    wrapper.innerHTML = `<div id="emulator-player"><div id="game-canvas"></div></div>`;
 
+    if (catalogScreen) catalogScreen.classList.add('hidden');
+    if (emuScreen) emuScreen.classList.remove('hidden');
+    if (playingTitle) playingTitle.textContent = `Jogando: ${gameTitle}`;
+
+    if (wrapper) {
+        wrapper.innerHTML = `<div id="emulator-player"><div id="game-canvas"></div></div>`;
+    }
+
+    // Definição das configurações obrigatórias globais antes do script rodar
     window.EJS_player = '#game-canvas';
     window.EJS_core = system; 
     window.EJS_gameUrl = romUrl; 
@@ -105,12 +127,12 @@ window.launchGame = function(system, romUrl, gameTitle) {
     window.EJS_AdUrl = ''; 
     window.EJS_myserver = 'true';
 
-    window.EJS_disableLoadState = true; 
+    window.EJS_disableLoadState = false; // Alterado para false para permitir carregamentos customizados
     window.EJS_forceLoadOnStart = true; 
 
     const sanitizedTitle = gameTitle.replace(/[^a-zA-Z0-9]/g, "_") + ".sav";
 
-    // CARREGAMENTO AUTOMÁTICO
+    // CARREGAMENTO AUTOMÁTICO DO SAVE
     window.EJS_onLogin = async function() {
         if (!googleAccessToken) return;
 
@@ -127,15 +149,17 @@ window.launchGame = function(system, romUrl, gameTitle) {
                 const blob = await downloadResponse.blob();
                 const buffer = await blob.arrayBuffer();
                 
-                window.EJS_LoadState(new Uint8Array(buffer));
-                console.log("Progresso restaurado automaticamente!");
+                if (typeof window.EJS_LoadState === 'function') {
+                    window.EJS_LoadState(new Uint8Array(buffer));
+                    console.log("Progresso restaurado automaticamente!");
+                }
             }
         } catch (err) {
             console.error("Falha ao recuperar save state do Google Drive:", err);
         }
     };
 
-    // SALVAMENTO SEGURO
+    // SALVAMENTO SEGURO NO DRIVE
     window.EJS_onSaveState = async function(data) {
         if (!googleAccessToken) {
             alert("Faça login com sua conta Google para salvar o progresso no seu Drive pessoal!");
@@ -172,9 +196,11 @@ window.launchGame = function(system, romUrl, gameTitle) {
         }
     };
 
+    // Injeção limpa e assíncrona do script do emulador para evitar conflito de escopo
     const script = document.createElement('script');
     script.src = 'https://cdn.emulatorjs.org/latest/data/loader.js';
-    document.getElementById('emulator-player').appendChild(script);
+    script.async = true;
+    document.body.appendChild(script);
 };
 
 /**
@@ -182,7 +208,10 @@ window.launchGame = function(system, romUrl, gameTitle) {
  */
 window.uploadAndPlay = function() {
     const fileInput = document.getElementById('rom-upload');
-    let system = document.getElementById('system-select').value;
+    const systemSelect = document.getElementById('system-select');
+    if (!fileInput || !systemSelect) return;
+
+    let system = systemSelect.value;
     
     if (fileInput.files.length === 0) {
         alert("Por favor, selecione um arquivo de ROM primeiro!");
@@ -200,19 +229,14 @@ window.uploadAndPlay = function() {
 
     if (activeBlobUrl) { URL.revokeObjectURL(activeBlobUrl); }
     activeBlobUrl = URL.createObjectURL(file);
-    launchGame(system, activeBlobUrl, file.name);
+    window.launchGame(system, activeBlobUrl, file.name);
 };
 
 /**
- * 🔥 OPERAÇÃO PURGA MÁXIMA:
- * Corta as conexões de gamepads do sistema operacional e limpa os scripts fantasmas forçando um reload limpo da página.
+ * Operação de fechar o Emulador e dar Refresh limpo na página
  */
 window.closeEmulator = function() {
     console.log("Cortando conexões paralelas do WebAssembly...");
-    
-    // Seta a flag para o script saber que deve carregar direto na dashboard pós-refresh
     sessionStorage.setItem('emu_purge_active', 'true');
-    
-    // Executa a purga total limpando a memória RAM e as threads ativas de áudio/controles do navegador
     window.location.reload();
 };
